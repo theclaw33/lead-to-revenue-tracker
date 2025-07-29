@@ -17,8 +17,13 @@
   status = 200
 
 [[redirects]]
-  from = "/auth/*"
-  to = "/.netlify/functions/auth-quickbooks/*"
+  from = "/auth/quickbooks"
+  to = "/.netlify/functions/auth-quickbooks"
+  status = 200
+
+[[redirects]]
+  from = "/callback/quickbooks"
+  to = "/.netlify/functions/auth-quickbooks/callback"
   status = 200
 
 [context.production.environment]
