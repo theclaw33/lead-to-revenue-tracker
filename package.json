@@ -1,0 +1,42 @@
+{
+  "name": "lead-to-revenue-tracker",
+  "version": "1.0.0",
+  "description": "Automation connecting HouseCall Pro → Airtable → QuickBooks Online for lead-to-revenue tracking",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "netlify:dev": "netlify dev",
+    "netlify:build": "npm install",
+    "netlify:deploy": "netlify deploy --prod",
+    "local-dev": "node local-dev.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "housecall-pro",
+    "airtable",
+    "quickbooks",
+    "webhook",
+    "automation",
+    "lead-tracking"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "airtable": "^0.12.2",
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "fuse.js": "^7.0.0",
+    "helmet": "^7.1.0",
+    "intuit-oauth": "^4.1.0",
+    "morgan": "^1.10.0",
+    "node-quickbooks": "^2.0.34"
+  },
+  "devDependencies": {
+    "netlify-cli": "^17.38.1",
+    "nodemon": "^3.0.1",
+    "serverless-http": "^3.2.0"
+  }
+}
