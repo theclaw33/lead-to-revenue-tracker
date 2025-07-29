@@ -45,7 +45,7 @@ After creating the GitHub repository, replace `yourusername` with your actual Gi
 cd /Users/lindsaygonzales/Desktop/Projects/lead-to-revenue-tracker
 
 # Add GitHub as remote origin (replace yourusername!)
-git remote add origin git@github.com:yourusername/lead-to-revenue-tracker.git
+git remote add origin git@github.com:theclaw33/lead-to-revenue-tracker.git
 
 # Push to GitHub
 git push -u origin main
