@@ -15,6 +15,15 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Debug middleware - log all requests
+app.use((req, res, next) => {
+  console.log(`[WEBHOOK DEBUG] ${req.method} ${req.path} - Headers:`, req.headers);
+  console.log(`[WEBHOOK DEBUG] Full URL: ${req.url}`);
+  console.log(`[WEBHOOK DEBUG] Base URL: ${req.baseUrl}`);
+  console.log(`[WEBHOOK DEBUG] Original URL: ${req.originalUrl}`);
+  next();
+});
+
 // Initialize API clients
 // HCP API only initialized if API key is available (for direct HCP integration)
 let hcp = null;
@@ -211,7 +220,8 @@ async function processPaymentReceived(paymentData) {
 }
 
 // HouseCall Pro webhook handler (via GHL)
-app.post('/hcp-webhook', async (req, res) => {
+// Handle both direct route and sub-path route
+const handleHCPWebhook = async (req, res) => {
   try {
     const signature = req.headers['x-housecall-signature'];
     const payload = req.body;
@@ -255,10 +265,20 @@ app.post('/hcp-webhook', async (req, res) => {
     console.error('HouseCall Pro webhook error:', error);
     res.status(500).json({ error: 'Webhook processing failed' });
   }
+};
+
+// Mount HCP webhook handler on multiple routes
+app.post('/hcp-webhook', handleHCPWebhook);
+app.post('/hcp-webhook/', handleHCPWebhook);
+app.use('/hcp-webhook', (req, res, next) => {
+  if (req.method === 'POST') {
+    return handleHCPWebhook(req, res);
+  }
+  next();
 });
 
 // QuickBooks webhook handler
-app.post('/qbo-webhook', async (req, res) => {
+const handleQBOWebhook = async (req, res) => {
   try {
     const signature = req.headers['intuit-signature'];
     const payload = req.body;
@@ -288,6 +308,29 @@ app.post('/qbo-webhook', async (req, res) => {
     console.error('QuickBooks webhook error:', error);
     res.status(500).json({ error: 'Webhook processing failed' });
   }
+};
+
+// Mount QBO webhook handler on multiple routes
+app.post('/qbo-webhook', handleQBOWebhook);
+app.post('/qbo-webhook/', handleQBOWebhook);
+app.use('/qbo-webhook', (req, res, next) => {
+  if (req.method === 'POST') {
+    return handleQBOWebhook(req, res);
+  }
+  next();
+});
+
+// Root webhook endpoint - shows available routes
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Lead-to-Revenue Tracker Webhook Function',
+    availableEndpoints: {
+      'HCP Webhook': 'POST /hcp-webhook or POST /.netlify/functions/webhook/hcp-webhook',
+      'QBO Webhook': 'POST /qbo-webhook or POST /.netlify/functions/webhook/qbo-webhook',
+      'Health Check': 'GET /health'
+    },
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Health check endpoint
