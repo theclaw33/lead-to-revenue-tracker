@@ -267,14 +267,30 @@ const handleHCPWebhook = async (req, res) => {
   }
 };
 
-// Mount HCP webhook handler on multiple routes
-app.post('/hcp-webhook', handleHCPWebhook);
-app.post('/hcp-webhook/', handleHCPWebhook);
-app.use('/hcp-webhook', (req, res, next) => {
-  if (req.method === 'POST') {
+// Handle all POST requests - route based on path
+app.post('*', async (req, res) => {
+  const path = req.path || req.url;
+  console.log(`[WEBHOOK ROUTER] Handling POST to: ${path}`);
+  
+  // Route to HCP webhook handler
+  if (path.includes('hcp-webhook') || path.includes('hcp_webhook')) {
+    console.log('[WEBHOOK ROUTER] Routing to HCP webhook handler');
     return handleHCPWebhook(req, res);
   }
-  next();
+  
+  // Route to QBO webhook handler  
+  if (path.includes('qbo-webhook') || path.includes('qbo_webhook')) {
+    console.log('[WEBHOOK ROUTER] Routing to QBO webhook handler');
+    return handleQBOWebhook(req, res);
+  }
+  
+  // Unknown webhook path
+  console.log(`[WEBHOOK ROUTER] Unknown webhook path: ${path}`);
+  res.status(404).json({ 
+    error: 'Webhook endpoint not found',
+    path: path,
+    availableEndpoints: ['hcp-webhook', 'qbo-webhook']
+  });
 });
 
 // QuickBooks webhook handler
@@ -310,25 +326,16 @@ const handleQBOWebhook = async (req, res) => {
   }
 };
 
-// Mount QBO webhook handler on multiple routes
-app.post('/qbo-webhook', handleQBOWebhook);
-app.post('/qbo-webhook/', handleQBOWebhook);
-app.use('/qbo-webhook', (req, res, next) => {
-  if (req.method === 'POST') {
-    return handleQBOWebhook(req, res);
-  }
-  next();
-});
-
 // Root webhook endpoint - shows available routes
 app.get('/', (req, res) => {
   res.json({
     message: 'Lead-to-Revenue Tracker Webhook Function',
     availableEndpoints: {
-      'HCP Webhook': 'POST /hcp-webhook or POST /.netlify/functions/webhook/hcp-webhook',
-      'QBO Webhook': 'POST /qbo-webhook or POST /.netlify/functions/webhook/qbo-webhook',
-      'Health Check': 'GET /health'
+      'HCP Webhook': 'POST /.netlify/functions/webhook/hcp-webhook',
+      'QBO Webhook': 'POST /.netlify/functions/webhook/qbo-webhook',
+      'Health Check': 'GET /.netlify/functions/health'
     },
+    routing: 'All POST requests routed by path matching',
     timestamp: new Date().toISOString()
   });
 });
