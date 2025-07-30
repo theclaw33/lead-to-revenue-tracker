@@ -140,10 +140,14 @@ async function processGHLLead(webhookData) {
     
     console.log(`Transformed GHL lead: ${customerData.name} (${customerData.email})`);
     
-    // Create lead record in Airtable using the same method
-    const leadRecord = await airtable.createLead(customerData);
+    // Upsert lead record in Airtable (create or update based on Customer Name)
+    const leadRecord = await airtable.upsertLead(customerData);
     
-    console.log(`✅ New GHL lead created in Airtable: ${customerData.name} (ID: ${leadRecord.id})`);
+    if (leadRecord.wasUpdated) {
+      console.log(`✅ Existing GHL lead updated in Airtable: ${customerData.name} (ID: ${leadRecord.id})`);
+    } else {
+      console.log(`✅ New GHL lead created in Airtable: ${customerData.name} (ID: ${leadRecord.id})`);
+    }
     
     return leadRecord;
   } catch (error) {
@@ -166,10 +170,14 @@ async function processNewCustomer(webhookData) {
     // Extract customer data from webhook
     const customerData = await hcp.handleCustomerCreated(webhookData);
     
-    // Create lead record in Airtable
-    const leadRecord = await airtable.createLead(customerData);
+    // Upsert lead record in Airtable (create or update based on Customer Name)
+    const leadRecord = await airtable.upsertLead(customerData);
     
-    console.log(`✅ New lead created in Airtable: ${customerData.name} (ID: ${leadRecord.id})`);
+    if (leadRecord.wasUpdated) {
+      console.log(`✅ Existing lead updated in Airtable: ${customerData.name} (ID: ${leadRecord.id})`);
+    } else {
+      console.log(`✅ New lead created in Airtable: ${customerData.name} (ID: ${leadRecord.id})`);
+    }
     
     return leadRecord;
   } catch (error) {

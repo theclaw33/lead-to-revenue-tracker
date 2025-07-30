@@ -67,6 +67,85 @@ class AirtableAPI {
   }
 
   /**
+   * Upsert a lead record in Airtable (create or update based on Customer Name)
+   * @param {Object} customerData - Customer data from HouseCall Pro/GHL
+   * @returns {Object} Created or updated record data
+   */
+  async upsertLead(customerData) {
+    try {
+      console.log(`Upserting lead in Airtable: ${customerData.name}`);
+      
+      // First, try to find existing record by customer name
+      const existingRecords = await this.leadsTable.select({
+        filterByFormula: `{Customer Name} = "${customerData.name}"`,
+        maxRecords: 1
+      }).firstPage();
+      
+      // Format date for Airtable (YYYY-MM-DD format)
+      let formattedDate = customerData.dateCreated;
+      if (customerData.dateCreated) {
+        const date = new Date(customerData.dateCreated);
+        formattedDate = date.toISOString().split('T')[0]; // Convert to YYYY-MM-DD
+      }
+      
+      const recordData = {
+        'Customer Name': customerData.name,
+        'Email': customerData.email,
+        'Phone': customerData.phone,
+        'Lead Source': customerData.leadSource,
+        'Date Created': formattedDate,
+        'HCP Customer ID': customerData.id,
+        'Address': customerData.address || '',
+        'Notes': customerData.notes || '',
+        'Tags': customerData.tags ? customerData.tags.join(', ') : ''
+      };
+      
+      let record;
+      if (existingRecords.length > 0) {
+        // Update existing record
+        const existingRecord = existingRecords[0];
+        console.log(`Found existing record for ${customerData.name}, updating...`);
+        
+        // Remove fields that shouldn't be overwritten if they already exist
+        const updateData = { ...recordData };
+        
+        // Don't overwrite payment fields if they already have values
+        if (existingRecord.fields['Payment Status'] !== 'Pending' || existingRecord.fields['Payment Amount'] > 0) {
+          delete updateData['Payment Status'];
+          delete updateData['Payment Amount'];
+        }
+        
+        // Don't overwrite Date Created if it already exists
+        if (existingRecord.fields['Date Created']) {
+          delete updateData['Date Created'];
+        }
+        
+        record = await this.leadsTable.update(existingRecord.getId(), updateData);
+        console.log(`Lead updated successfully with Airtable ID: ${record.getId()}`);
+      } else {
+        // Create new record
+        console.log(`No existing record found for ${customerData.name}, creating new...`);
+        
+        // Add default payment fields for new records
+        recordData['Payment Status'] = 'Pending';
+        recordData['Payment Amount'] = 0;
+        
+        record = await this.leadsTable.create(recordData);
+        console.log(`Lead created successfully with Airtable ID: ${record.getId()}`);
+      }
+      
+      return {
+        id: record.getId(),
+        fields: record.fields,
+        wasUpdated: existingRecords.length > 0
+      };
+    } catch (error) {
+      console.error('Error upserting lead in Airtable:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Find a lead by customer name (supports fuzzy matching)
    * @param {string} customerName - Customer name to search for
    * @param {number} threshold - Fuzzy match threshold (0-1)
