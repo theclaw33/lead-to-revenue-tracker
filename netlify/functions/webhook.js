@@ -34,12 +34,39 @@ if (process.env.HOUSECALL_PRO_API_KEY) {
 const airtable = new AirtableAPI();
 const qbo = new QuickBooksAPI();
 
+// Simple in-memory cache to prevent duplicate processing
+const recentlyProcessed = new Map();
+const DUPLICATE_WINDOW_MS = 5000; // 5 seconds
+
 /**
  * Process new lead from Go High Level
  */
 async function processGHLLead(webhookData) {
   try {
     console.log('Processing new lead from Go High Level');
+    
+    // Create a unique key for this webhook based on contact ID or email
+    const uniqueKey = webhookData.contact_id || webhookData.email || webhookData.full_name;
+    const now = Date.now();
+    
+    // Check if we've recently processed this exact webhook
+    if (recentlyProcessed.has(uniqueKey)) {
+      const lastProcessed = recentlyProcessed.get(uniqueKey);
+      if (now - lastProcessed < DUPLICATE_WINDOW_MS) {
+        console.log(`Skipping duplicate webhook for ${uniqueKey} (processed ${now - lastProcessed}ms ago)`);
+        return { skipped: true, reason: 'duplicate' };
+      }
+    }
+    
+    // Mark as processed
+    recentlyProcessed.set(uniqueKey, now);
+    
+    // Clean up old entries
+    for (const [key, timestamp] of recentlyProcessed.entries()) {
+      if (now - timestamp > DUPLICATE_WINDOW_MS * 2) {
+        recentlyProcessed.delete(key);
+      }
+    }
     
     // Extract lead source from various possible locations
     let leadSource = 'Go High Level'; // default fallback
@@ -50,12 +77,21 @@ async function processGHLLead(webhookData) {
       webhookData['Lead Source'], // Direct field
       webhookData['HCP Lead Source'], // Custom field  
       webhookData['lead_source'], // Snake case version
+      webhookData['hcp_lead_source'], // Snake case HCP version
+      webhookData['housecall_pro_lead_source'], // Full snake case
       webhookData.leadSource, // Direct property
       webhookData.source, // Alternative property
       webhookData.customData?.leadSource, // In custom data
+      webhookData.customData?.['Lead Source'], // In custom data with spaces
+      webhookData.customData?.['HCP Lead Source'], // In custom data HCP
+      webhookData.customData?.['Housecall Pro Lead Source'], // In custom data full
       webhookData.customData?.source, // In custom data alternative
       webhookData.customData?.lead_source, // In custom data snake case
+      webhookData.customFields?.leadSource, // In custom fields
+      webhookData.customFields?.['Lead Source'], // In custom fields with spaces
       webhookData.contact?.source, // In contact object
+      webhookData.contact?.leadSource, // In contact object
+      webhookData.contact?.['Lead Source'], // In contact object with spaces
       webhookData.triggerData?.source, // In trigger data
       webhookData.contact?.attributionSource?.source, // Attribution source
       webhookData.contact?.attributionSource?.medium, // Attribution medium
@@ -77,13 +113,19 @@ async function processGHLLead(webhookData) {
       key.toLowerCase().includes('lead') || key.toLowerCase().includes('source')
     ));
     console.log('- All HCP-related fields:', Object.keys(webhookData).filter(key => 
-      key.includes('HCP') || key.includes('hcp')
+      key.toLowerCase().includes('hcp') || key.toLowerCase().includes('housecall')
     ));
-    console.log('- Custom data keys:', Object.keys(webhookData.customData || {}));
-    console.log('- Trigger data keys:', Object.keys(webhookData.triggerData || {}));
+    console.log('- All webhook data keys:', Object.keys(webhookData));
+    console.log('- Custom data:', webhookData.customData);
+    console.log('- Custom fields:', webhookData.customFields);
+    console.log('- Contact object:', webhookData.contact);
+    console.log('- Trigger data:', webhookData.triggerData);
     console.log('- Key field values:');
     console.log('  * Housecall Pro Lead Source:', webhookData['Housecall Pro Lead Source']);
-    console.log('  * customData.lead_source:', webhookData.customData?.lead_source);
+    console.log('  * Lead Source:', webhookData['Lead Source']);
+    console.log('  * lead_source:', webhookData['lead_source']);
+    console.log('  * customData?.lead_source:', webhookData.customData?.lead_source);
+    console.log('  * customFields?.["Lead Source"]:', webhookData.customFields?.['Lead Source']);
     console.log('  * HCP Tags:', webhookData['HCP Tags']);
     console.log('- Selected lead source:', leadSource);
     

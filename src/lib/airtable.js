@@ -75,9 +75,20 @@ class AirtableAPI {
     try {
       console.log(`Upserting lead in Airtable: ${customerData.name}`);
       
-      // First, try to find existing record by customer name
+      // First, try to find existing record by customer name or email
+      // Escape special characters in the name for Airtable formula
+      const escapedName = customerData.name.replace(/"/g, '\\"').replace(/\\/g, '\\\\');
+      const escapedEmail = customerData.email ? customerData.email.replace(/"/g, '\\"').replace(/\\/g, '\\\\') : '';
+      
+      // Build filter formula to check both name and email
+      let filterFormula = `OR({Customer Name} = "${escapedName}"`;
+      if (customerData.email) {
+        filterFormula += `, {Email} = "${escapedEmail}"`;
+      }
+      filterFormula += ')';
+      
       const existingRecords = await this.leadsTable.select({
-        filterByFormula: `{Customer Name} = "${customerData.name}"`,
+        filterByFormula: filterFormula,
         maxRecords: 1
       }).firstPage();
       
