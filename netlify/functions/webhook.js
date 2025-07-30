@@ -16,7 +16,12 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Initialize API clients
-const hcp = new HouseCallProAPI();
+// HCP API only initialized if API key is available (for direct HCP integration)
+let hcp = null;
+if (process.env.HOUSECALL_PRO_API_KEY) {
+  hcp = new HouseCallProAPI();
+}
+
 const airtable = new AirtableAPI();
 const qbo = new QuickBooksAPI();
 
@@ -144,6 +149,10 @@ async function processGHLLead(webhookData) {
 async function processNewCustomer(webhookData) {
   try {
     console.log('Processing new customer from HouseCall Pro');
+    
+    if (!hcp) {
+      throw new Error('HouseCall Pro API not configured. Use GHL integration path instead.');
+    }
     
     // Extract customer data from webhook
     const customerData = await hcp.handleCustomerCreated(webhookData);
