@@ -208,6 +208,73 @@ exports.handler = async (event, context) => {
     };
   }
   
+  // Test mode with sample data
+  if (event.queryStringParameters?.testdata) {
+    try {
+      // Configure Airtable
+      Airtable.configure({
+        endpointUrl: 'https://api.airtable.com',
+        apiKey: process.env.AIRTABLE_API_KEY
+      });
+      
+      const base = Airtable.base(process.env.AIRTABLE_BASE_ID);
+      const summaryTable = base(process.env.AIRTABLE_MONTHLY_SUMMARY_TABLE_NAME || 'Monthly Summary');
+      
+      // Create sample ad spend data for testing
+      const sampleAdSpend = {
+        'Box Truck': 1500,
+        'Angi': 800,
+        'Yard Sign': 300,
+        'Billboard': 2000,
+        'Google Ads': 1200
+      };
+      
+      const now = new Date();
+      const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const month = previousMonth.getMonth() + 1;
+      const year = previousMonth.getFullYear();
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                         'July', 'August', 'September', 'October', 'November', 'December'];
+      const monthName = monthNames[month - 1];
+      
+      const updatedRecords = [];
+      
+      // Create records for each lead source
+      for (const [leadSource, adSpend] of Object.entries(sampleAdSpend)) {
+        const newRecord = await summaryTable.create({
+          'Month': monthName,
+          'Year': String(year),
+          'Lead Source': leadSource,
+          'Total Revenue': 0,
+          'Ad Spend': String(adSpend)
+        });
+        
+        updatedRecords.push({
+          leadSource,
+          adSpend,
+          action: 'created',
+          recordId: newRecord.getId()
+        });
+      }
+      
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          message: 'Test data created successfully',
+          period: `${year}-${String(month).padStart(2, '0')}`,
+          totalAdSpend: Object.values(sampleAdSpend).reduce((a, b) => a + b, 0),
+          recordsProcessed: updatedRecords.length,
+          details: updatedRecords
+        })
+      };
+    } catch (error) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: error.message })
+      };
+    }
+  }
+  
   // Debug endpoint to see all expenses
   if (event.queryStringParameters?.debug) {
     try {
@@ -296,9 +363,10 @@ exports.handler = async (event, context) => {
         const endDate = `${year}-${String(month).padStart(2, '0')}-${new Date(year, month, 0).getDate()}`;
         
         const expenses = await fetchQuickBooksExpenses(qbTokens, startDate, endDate, [
-          'Marketing', 'Advertising', 'Google Ads', 'Facebook Ads',
-          'Box Truck', 'Angi', 'Yard Sign', 'Billboard',
-          'Online Advertising', 'Social Media Advertising'
+          'Advertising/Promotional', 'Marketing', 'Advertising', 
+          'Google Ads', 'Facebook Ads', 'Box Truck', 'Angi', 
+          'Yard Sign', 'Billboard', 'Online Advertising', 
+          'Social Media Advertising', 'Promotional'
         ]);
         
         // Process expenses by category
