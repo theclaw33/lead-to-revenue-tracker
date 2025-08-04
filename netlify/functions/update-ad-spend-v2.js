@@ -97,33 +97,18 @@ exports.handler = async (event, context) => {
         'Year': String(year), // Convert year to string
         'Total Revenue': 0,
         'Ad Spend': String(adSpendData.totalAdSpend), // Convert to string
-        'Total Promo Spend': 0,
-        'Net Revenue': -adSpendData.totalAdSpend,
-        'Customer Count': 0,
-        'Average Revenue Per Customer': 0,
-        'Revenue by Source': JSON.stringify({}),
-        'Ad Spend by Category': JSON.stringify(adSpendData.adSpendByCategory),
+        'Lead Source': 'Various' // Placeholder since this is monthly summary
         // ROI is calculated by Airtable formula - don't set it
-        'Created At': new Date().toISOString(),
-        'Last Updated': new Date().toISOString(),
-        'Ad Spend Updated': new Date().toISOString()
       };
       
       record = await summaryTable.create(recordData);
     } else {
       // Update existing record
       const existingRecord = existingRecords[0];
-      const currentFields = existingRecord.fields;
-      const totalRevenue = currentFields['Total Revenue'] || 0;
-      const totalPromoSpend = currentFields['Total Promo Spend'] || 0;
       
       const updateData = {
-        'Ad Spend': String(adSpendData.totalAdSpend), // Convert to string
-        'Ad Spend by Category': JSON.stringify(adSpendData.adSpendByCategory),
-        'Net Revenue': totalRevenue - adSpendData.totalAdSpend - totalPromoSpend,
+        'Ad Spend': String(adSpendData.totalAdSpend) // Convert to string
         // ROI is calculated by Airtable formula - don't set it
-        'Last Updated': new Date().toISOString(),
-        'Ad Spend Updated': new Date().toISOString()
       };
       
       record = await summaryTable.update(existingRecord.getId(), updateData);
