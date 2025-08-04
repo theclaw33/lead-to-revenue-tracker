@@ -360,7 +360,7 @@ class QuickBooksAPI {
         this.clientId,
         this.clientSecret,
         this.accessToken,
-        false, // no token secret for OAuth2
+        '', // empty string for token secret in OAuth2
         this.companyId,
         this.sandbox
       );
@@ -402,7 +402,7 @@ class QuickBooksAPI {
         this.clientId,
         this.clientSecret,
         this.accessToken,
-        false,
+        '', // empty string for token secret in OAuth2
         this.companyId,
         this.sandbox
       );
