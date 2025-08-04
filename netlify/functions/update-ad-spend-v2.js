@@ -54,6 +54,34 @@ exports.handler = async (event, context) => {
     };
   }
   
+  // Debug tokens
+  if (event.queryStringParameters?.tokens) {
+    try {
+      const AirtableAPI = require('../../src/lib/airtable');
+      const airtable = new AirtableAPI();
+      const tokens = await airtable.getOAuthTokens('QuickBooks');
+      
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          tokensFound: !!tokens,
+          tokenData: tokens ? {
+            hasAccessToken: !!tokens.accessToken,
+            hasRefreshToken: !!tokens.refreshToken,
+            hasCompanyId: !!tokens.companyId,
+            expiresAt: tokens.expiresAt,
+            updatedAt: tokens.updatedAt
+          } : 'No tokens found'
+        })
+      };
+    } catch (error) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: error.message })
+      };
+    }
+  }
+  
   try {
     // Check environment variables
     if (!process.env.AIRTABLE_API_KEY || !process.env.AIRTABLE_BASE_ID) {
@@ -102,7 +130,10 @@ exports.handler = async (event, context) => {
     const qbo = new QuickBooksAPI();
     
     // Try to connect to QuickBooks
+    console.log('Attempting to initialize QuickBooks from stored tokens...');
     const qboConnected = await qbo.initializeFromStoredTokens();
+    console.log('QuickBooks connection result:', qboConnected);
+    
     let adSpendData = {
       totalAdSpend: 0,
       adSpendByCategory: {},
