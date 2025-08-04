@@ -9,12 +9,15 @@ exports.handler = async (event, context) => {
     
     // Debug endpoint to check configuration
     if (event.queryStringParameters?.debug) {
+      const authUrl = qbo.getAuthorizationUrl();
       return {
         statusCode: 200,
         body: JSON.stringify({
           redirectUri: process.env.QBO_REDIRECT_URI,
           clientId: process.env.QBO_CLIENT_ID ? 'Set' : 'Not set',
+          sandbox: process.env.QBO_SANDBOX,
           environment: process.env.NODE_ENV,
+          authUrl: authUrl,
           timestamp: new Date().toISOString()
         })
       };
