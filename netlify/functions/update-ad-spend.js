@@ -1,16 +1,29 @@
-const AirtableAPI = require('../../src/lib/airtable');
-const QuickBooksAPI = require('../../src/lib/quickbooks');
 require('dotenv').config();
-
-const airtable = new AirtableAPI();
-const qbo = new QuickBooksAPI();
 
 /**
  * Scheduled function to update ad spend on the 3rd of each month
  * This function should be triggered via Netlify Scheduled Functions or external cron
  */
 exports.handler = async (event, context) => {
+  console.log('Update ad spend function triggered');
+  
+  // Quick test to see if function is reachable
+  if (event.queryStringParameters?.test) {
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ message: 'Function is working!', timestamp: new Date().toISOString() })
+    };
+  }
+  
   try {
+    // Lazy load dependencies to avoid initialization errors
+    const AirtableAPI = require('../../src/lib/airtable');
+    const QuickBooksAPI = require('../../src/lib/quickbooks');
+    
+    console.log('Initializing APIs...');
+    const airtable = new AirtableAPI();
+    const qbo = new QuickBooksAPI();
+    
     console.log('Starting monthly ad spend update...');
     
     // Get current date
@@ -37,10 +50,10 @@ exports.handler = async (event, context) => {
     console.log(`Fetching ad spend for ${month}/${year}`);
     
     // Fetch ad spend from QuickBooks
-    const adSpendData = await fetchAdSpendFromQuickBooks(month, year);
+    const adSpendData = await fetchAdSpendFromQuickBooks(month, year, qbo);
     
     // Update Monthly Summary with ad spend
-    const updatedSummary = await updateMonthlySummaryAdSpend(period, adSpendData);
+    const updatedSummary = await updateMonthlySummaryAdSpend(period, adSpendData, airtable);
     
     return {
       statusCode: 200,
@@ -63,7 +76,7 @@ exports.handler = async (event, context) => {
 /**
  * Fetch ad spend from QuickBooks for a specific month
  */
-async function fetchAdSpendFromQuickBooks(month, year) {
+async function fetchAdSpendFromQuickBooks(month, year, qbo) {
   try {
     // Get start and end dates for the month
     const startDate = new Date(year, month - 1, 1);
@@ -116,7 +129,7 @@ async function fetchAdSpendFromQuickBooks(month, year) {
 /**
  * Update Monthly Summary with ad spend data
  */
-async function updateMonthlySummaryAdSpend(period, adSpendData) {
+async function updateMonthlySummaryAdSpend(period, adSpendData, airtable) {
   try {
     // Find existing monthly summary record
     const existingRecords = await airtable.summaryTable.select({
