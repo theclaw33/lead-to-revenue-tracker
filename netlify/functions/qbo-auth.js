@@ -7,6 +7,19 @@ exports.handler = async (event, context) => {
   try {
     const qbo = new QuickBooksAPI();
     
+    // Debug endpoint to check configuration
+    if (event.queryStringParameters?.debug) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          redirectUri: process.env.QBO_REDIRECT_URI,
+          clientId: process.env.QBO_CLIENT_ID ? 'Set' : 'Not set',
+          environment: process.env.NODE_ENV,
+          timestamp: new Date().toISOString()
+        })
+      };
+    }
+    
     // Handle callback with auth code
     if (event.queryStringParameters?.code && event.queryStringParameters?.realmId) {
       const { code, realmId } = event.queryStringParameters;

@@ -36,26 +36,23 @@ class QuickBooksAPI {
    * @returns {string} Authorization URL
    */
   getAuthorizationUrl() {
-    // Build OAuth URL manually - try multiple scope formats
+    console.log('Building QuickBooks auth URL...');
+    console.log('Client ID:', this.clientId);
+    console.log('Redirect URI:', this.redirectUri);
+    
     const baseUrl = 'https://appcenter.intuit.com/app/connect/oauth2';
+    const params = new URLSearchParams({
+      client_id: this.clientId,
+      scope: 'com.intuit.quickbooks.accounting',
+      redirect_uri: this.redirectUri,
+      response_type: 'code',
+      state: 'auth_' + Date.now()
+    });
     
-    // Try the correct QuickBooks scope values
-    const authUri = `${baseUrl}?client_id=${encodeURIComponent(this.clientId)}&scope=${encodeURIComponent('com.intuit.quickbooks.accounting')}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&state=testState`;
+    const authUrl = `${baseUrl}?${params.toString()}`;
+    console.log('Generated auth URL:', authUrl);
     
-    console.log('Visit this URL to authorize the application (MAIN):');
-    console.log(authUri);
-    
-    // Try the space-separated scope format that QuickBooks expects
-    const correctScope = `${baseUrl}?client_id=${encodeURIComponent(this.clientId)}&scope=com.intuit.quickbooks.accounting&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&state=testState`;
-    console.log('\nTRY THIS ONE (unencoded scope):');
-    console.log(correctScope);
-    
-    // Try with multiple scopes space-separated
-    const multiScope = `${baseUrl}?client_id=${encodeURIComponent(this.clientId)}&scope=com.intuit.quickbooks.accounting%20com.intuit.quickbooks.payment&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&state=testState`;
-    console.log('\nAlternative (with payment scope):');
-    console.log(multiScope);
-    
-    return authUri;
+    return authUrl;
   }
 
   /**
