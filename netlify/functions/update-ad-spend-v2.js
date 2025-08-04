@@ -75,7 +75,7 @@ exports.handler = async (event, context) => {
     let existingRecords;
     try {
       existingRecords = await summaryTable.select({
-        filterByFormula: `AND({Month} = "${monthName}", {Year} = ${year})`,
+        filterByFormula: `AND({Month} = "${monthName}", {Year} = "${year}")`,
         maxRecords: 1
       }).firstPage();
     } catch (e) {
@@ -94,7 +94,7 @@ exports.handler = async (event, context) => {
       // Create new record with placeholder ad spend
       const recordData = {
         'Month': monthName, // Use month name instead of number
-        'Year': year,
+        'Year': String(year), // Convert year to string
         'Period': period,
         'Total Revenue': 0,
         'Total Ad Spend': adSpendData.totalAdSpend,
