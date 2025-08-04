@@ -96,7 +96,7 @@ exports.handler = async (event, context) => {
         'Month': monthName, // Use month name instead of number
         'Year': String(year), // Convert year to string
         'Total Revenue': 0,
-        'Total Ad Spend': String(adSpendData.totalAdSpend), // Convert to string
+        'Ad Spend': String(adSpendData.totalAdSpend), // Convert to string
         'Total Promo Spend': 0,
         'Net Revenue': -adSpendData.totalAdSpend,
         'Customer Count': 0,
@@ -118,7 +118,7 @@ exports.handler = async (event, context) => {
       const totalPromoSpend = currentFields['Total Promo Spend'] || 0;
       
       const updateData = {
-        'Total Ad Spend': String(adSpendData.totalAdSpend), // Convert to string
+        'Ad Spend': String(adSpendData.totalAdSpend), // Convert to string
         'Ad Spend by Category': JSON.stringify(adSpendData.adSpendByCategory),
         'Net Revenue': totalRevenue - adSpendData.totalAdSpend - totalPromoSpend,
         // ROI is calculated by Airtable formula - don't set it
