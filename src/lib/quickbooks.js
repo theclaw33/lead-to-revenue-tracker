@@ -1,6 +1,7 @@
 const QuickBooks = require('node-quickbooks');
 const OAuthClient = require('intuit-oauth');
 const axios = require('axios');
+const AirtableAPI = require('./airtable');
 require('dotenv').config();
 
 class QuickBooksAPI {
@@ -10,6 +11,7 @@ class QuickBooksAPI {
     this.sandbox = process.env.QBO_SANDBOX === 'true';
     this.redirectUri = process.env.QBO_REDIRECT_URI;
     this.webhookVerifierToken = process.env.QBO_WEBHOOK_VERIFIER_TOKEN;
+    this.airtable = new AirtableAPI();
     
     if (!this.clientId || !this.clientSecret) {
       throw new Error('QBO_CLIENT_ID and QBO_CLIENT_SECRET are required');
@@ -94,6 +96,14 @@ class QuickBooksAPI {
       this.accessToken = authResponse.token.access_token;
       this.refreshToken = authResponse.token.refresh_token;
       this.companyId = realmId;
+      
+      // Save tokens to Airtable
+      await this.airtable.saveOAuthTokens({
+        accessToken: this.accessToken,
+        refreshToken: this.refreshToken,
+        companyId: this.companyId,
+        expiresIn: authResponse.token.expires_in || 3600
+      });
       
       // Skip QuickBooks client initialization for now - we'll initialize it when needed
       this.qbo = null;
@@ -320,6 +330,92 @@ class QuickBooksAPI {
         }
       });
     });
+  }
+
+  /**
+   * Initialize QuickBooks client with stored tokens
+   * @returns {boolean} Whether initialization was successful
+   */
+  async initializeFromStoredTokens() {
+    try {
+      const tokenData = await this.airtable.getOAuthTokens('QuickBooks');
+      
+      if (!tokenData) {
+        console.log('No stored QuickBooks tokens found');
+        return false;
+      }
+      
+      // Check if token is expired
+      const expiresAt = new Date(tokenData.expiresAt);
+      const now = new Date();
+      
+      if (expiresAt <= now) {
+        console.log('Access token expired, refreshing...');
+        return await this.refreshStoredToken(tokenData);
+      }
+      
+      // Initialize with stored tokens
+      this.accessToken = tokenData.accessToken;
+      this.refreshToken = tokenData.refreshToken;
+      this.companyId = tokenData.companyId;
+      
+      this.qbo = new QuickBooks(
+        this.clientId,
+        this.clientSecret,
+        this.accessToken,
+        false, // no token secret for OAuth2
+        this.companyId,
+        this.sandbox
+      );
+      
+      console.log('QuickBooks client initialized from stored tokens');
+      return true;
+    } catch (error) {
+      console.error('Error initializing from stored tokens:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Refresh expired token
+   * @param {Object} tokenData - Current token data
+   * @returns {boolean} Whether refresh was successful
+   */
+  async refreshStoredToken(tokenData) {
+    try {
+      this.oAuthClient.refreshToken = tokenData.refreshToken;
+      
+      const authResponse = await this.oAuthClient.refresh();
+      const token = authResponse.getToken();
+      
+      // Save new tokens
+      await this.airtable.saveOAuthTokens({
+        accessToken: token.access_token,
+        refreshToken: token.refresh_token,
+        companyId: tokenData.companyId,
+        expiresIn: token.expires_in
+      });
+      
+      // Initialize with new tokens
+      this.accessToken = token.access_token;
+      this.refreshToken = token.refresh_token;
+      this.companyId = tokenData.companyId;
+      
+      this.qbo = new QuickBooks(
+        this.clientId,
+        this.clientSecret,
+        this.accessToken,
+        false,
+        this.companyId,
+        this.sandbox
+      );
+      
+      console.log('QuickBooks tokens refreshed successfully');
+      return true;
+    } catch (error) {
+      console.error('Error refreshing token:', error);
+      return false;
+    }
   }
 
   /**

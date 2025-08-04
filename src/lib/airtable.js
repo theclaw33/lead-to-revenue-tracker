@@ -7,6 +7,7 @@ class AirtableAPI {
     this.baseId = process.env.AIRTABLE_BASE_ID;
     this.leadsTableName = process.env.AIRTABLE_LEADS_TABLE_NAME || 'Leads';
     this.monthlySummaryTableName = process.env.AIRTABLE_MONTHLY_SUMMARY_TABLE_NAME || 'Monthly Summary';
+    this.tokensTableName = process.env.AIRTABLE_TOKENS_TABLE_NAME || 'OAuth Tokens';
     
     if (!this.apiKey || !this.baseId) {
       throw new Error('AIRTABLE_API_KEY and AIRTABLE_BASE_ID are required');
@@ -21,6 +22,7 @@ class AirtableAPI {
     this.base = Airtable.base(this.baseId);
     this.leadsTable = this.base(this.leadsTableName);
     this.summaryTable = this.base(this.monthlySummaryTableName);
+    this.tokensTable = this.base(this.tokensTableName);
   }
 
   /**
@@ -494,6 +496,88 @@ class AirtableAPI {
       return await this.getLeadsWithPayments(startDate, endDate);
     } catch (error) {
       console.error('Error fetching leads by month:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get QuickBooks OAuth tokens from Airtable
+   * @param {string} service - Service name (e.g., 'QuickBooks')
+   * @returns {Object|null} Token data or null if not found
+   */
+  async getOAuthTokens(service = 'QuickBooks') {
+    try {
+      const records = await this.tokensTable.select({
+        filterByFormula: `{Service} = "${service}"`,
+        maxRecords: 1
+      }).firstPage();
+      
+      if (records.length === 0) {
+        console.log(`No OAuth tokens found for ${service}`);
+        return null;
+      }
+      
+      const record = records[0];
+      return {
+        id: record.getId(),
+        accessToken: record.fields['Access Token'],
+        refreshToken: record.fields['Refresh Token'],
+        companyId: record.fields['Company ID'],
+        expiresAt: record.fields['Expires At'],
+        updatedAt: record.fields['Updated At']
+      };
+    } catch (error) {
+      console.error('Error fetching OAuth tokens:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Save or update QuickBooks OAuth tokens in Airtable
+   * @param {Object} tokenData - Token data to save
+   * @returns {Object} Saved record
+   */
+  async saveOAuthTokens(tokenData) {
+    try {
+      const { accessToken, refreshToken, companyId, expiresIn } = tokenData;
+      const service = 'QuickBooks';
+      
+      // Calculate expiration time
+      const expiresAt = new Date();
+      expiresAt.setSeconds(expiresAt.getSeconds() + (expiresIn || 3600));
+      
+      const recordData = {
+        'Service': service,
+        'Access Token': accessToken,
+        'Refresh Token': refreshToken,
+        'Company ID': companyId,
+        'Expires At': expiresAt.toISOString(),
+        'Updated At': new Date().toISOString()
+      };
+      
+      // Check if record already exists
+      const existingRecords = await this.tokensTable.select({
+        filterByFormula: `{Service} = "${service}"`,
+        maxRecords: 1
+      }).firstPage();
+      
+      let record;
+      if (existingRecords.length > 0) {
+        // Update existing record
+        record = await this.tokensTable.update(existingRecords[0].getId(), recordData);
+        console.log(`OAuth tokens updated for ${service}`);
+      } else {
+        // Create new record
+        record = await this.tokensTable.create(recordData);
+        console.log(`OAuth tokens created for ${service}`);
+      }
+      
+      return {
+        id: record.getId(),
+        fields: record.fields
+      };
+    } catch (error) {
+      console.error('Error saving OAuth tokens:', error);
       throw error;
     }
   }

@@ -42,3 +42,14 @@
   from = "/api/update-ad-spend"
   to = "/.netlify/functions/update-ad-spend"
   status = 200
+
+# QuickBooks OAuth endpoints
+[[redirects]]
+  from = "/qbo-auth"
+  to = "/.netlify/functions/qbo-auth"
+  status = 200
+
+[[redirects]]
+  from = "/qbo-auth/callback"
+  to = "/.netlify/functions/qbo-auth"
+  status = 200
