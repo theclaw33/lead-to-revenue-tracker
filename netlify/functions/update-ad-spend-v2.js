@@ -49,6 +49,11 @@ exports.handler = async (event, context) => {
     
     console.log(`Processing ad spend for ${month}/${year}`);
     
+    // Convert month number to month name
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                       'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthName = monthNames[month - 1];
+    
     // Configure Airtable
     Airtable.configure({
       endpointUrl: 'https://api.airtable.com',
@@ -66,11 +71,21 @@ exports.handler = async (event, context) => {
       message: 'QuickBooks integration pending - placeholder data'
     };
     
-    // Find existing monthly summary record
-    const existingRecords = await summaryTable.select({
-      filterByFormula: `AND({Month} = ${month}, {Year} = ${year})`,
-      maxRecords: 1
-    }).firstPage();
+    // Find existing monthly summary record - try with month name first
+    let existingRecords;
+    try {
+      existingRecords = await summaryTable.select({
+        filterByFormula: `AND({Month} = "${monthName}", {Year} = ${year})`,
+        maxRecords: 1
+      }).firstPage();
+    } catch (e) {
+      // If that fails, try with month number
+      console.log('Month name failed, trying with month number...');
+      existingRecords = await summaryTable.select({
+        filterByFormula: `AND({Month} = ${month}, {Year} = ${year})`,
+        maxRecords: 1
+      }).firstPage();
+    }
     
     let record;
     if (existingRecords.length === 0) {
@@ -78,7 +93,7 @@ exports.handler = async (event, context) => {
       
       // Create new record with placeholder ad spend
       const recordData = {
-        'Month': month,
+        'Month': monthName, // Use month name instead of number
         'Year': year,
         'Period': period,
         'Total Revenue': 0,
