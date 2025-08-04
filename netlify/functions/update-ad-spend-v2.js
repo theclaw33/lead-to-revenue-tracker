@@ -97,14 +97,14 @@ exports.handler = async (event, context) => {
         'Year': String(year), // Convert year to string
         'Period': period,
         'Total Revenue': 0,
-        'Total Ad Spend': adSpendData.totalAdSpend,
+        'Total Ad Spend': String(adSpendData.totalAdSpend), // Convert to string
         'Total Promo Spend': 0,
         'Net Revenue': -adSpendData.totalAdSpend,
         'Customer Count': 0,
         'Average Revenue Per Customer': 0,
         'Revenue by Source': JSON.stringify({}),
         'Ad Spend by Category': JSON.stringify(adSpendData.adSpendByCategory),
-        'ROI': 'N/A',
+        // ROI is calculated by Airtable formula - don't set it
         'Created At': new Date().toISOString(),
         'Last Updated': new Date().toISOString(),
         'Ad Spend Updated': new Date().toISOString()
@@ -119,12 +119,10 @@ exports.handler = async (event, context) => {
       const totalPromoSpend = currentFields['Total Promo Spend'] || 0;
       
       const updateData = {
-        'Total Ad Spend': adSpendData.totalAdSpend,
+        'Total Ad Spend': String(adSpendData.totalAdSpend), // Convert to string
         'Ad Spend by Category': JSON.stringify(adSpendData.adSpendByCategory),
         'Net Revenue': totalRevenue - adSpendData.totalAdSpend - totalPromoSpend,
-        'ROI': adSpendData.totalAdSpend > 0 
-          ? ((totalRevenue - adSpendData.totalAdSpend) / adSpendData.totalAdSpend * 100).toFixed(2) + '%' 
-          : 'N/A',
+        // ROI is calculated by Airtable formula - don't set it
         'Last Updated': new Date().toISOString(),
         'Ad Spend Updated': new Date().toISOString()
       };
