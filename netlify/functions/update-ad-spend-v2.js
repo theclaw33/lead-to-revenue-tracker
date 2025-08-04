@@ -95,7 +95,6 @@ exports.handler = async (event, context) => {
       const recordData = {
         'Month': monthName, // Use month name instead of number
         'Year': String(year), // Convert year to string
-        'Period': period,
         'Total Revenue': 0,
         'Total Ad Spend': String(adSpendData.totalAdSpend), // Convert to string
         'Total Promo Spend': 0,
