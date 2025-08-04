@@ -68,7 +68,7 @@ exports.handler = async (event, context) => {
     
     // Find existing monthly summary record
     const existingRecords = await summaryTable.select({
-      filterByFormula: `{Period} = '${period}'`,
+      filterByFormula: `AND({Month} = ${month}, {Year} = ${year})`,
       maxRecords: 1
     }).firstPage();
     
