@@ -249,6 +249,10 @@ async function processPaymentReceived(paymentData) {
       );
       
       console.log(`✅ Payment updated for lead: ${paymentData.customerName} (ID: ${matchingLead.id})`);
+      
+      // Automatically update Monthly Summary table
+      await updateMonthlySummaryForPayment(updatedLead, paymentData);
+      
       return updatedLead;
     } else {
       console.warn(`⚠️  No matching lead found for customer: ${paymentData.customerName}`);
@@ -266,6 +270,38 @@ async function processPaymentReceived(paymentData) {
   } catch (error) {
     console.error('Error processing payment:', error);
     throw error;
+  }
+}
+
+/**
+ * Update Monthly Summary table when a payment is received
+ */
+async function updateMonthlySummaryForPayment(leadRecord, paymentData) {
+  try {
+    // Extract month and year from payment date
+    const paymentDate = new Date(paymentData.paymentDate || new Date());
+    const month = paymentDate.getMonth() + 1; // JavaScript months are 0-indexed
+    const year = paymentDate.getFullYear();
+    
+    console.log(`Updating Monthly Summary for ${month}/${year}`);
+    
+    // Get the lead source from the updated lead record
+    const leadSource = leadRecord.fields['Lead Source'] || 'Unknown';
+    const paymentAmount = parseFloat(paymentData.amount) || 0;
+    
+    // Update or create the monthly summary
+    await airtable.updateMonthlySummaryWithPayment({
+      month,
+      year,
+      leadSource,
+      paymentAmount,
+      customerName: paymentData.customerName
+    });
+    
+    console.log(`✅ Monthly Summary updated for ${month}/${year} - ${leadSource}: +${Utils.formatCurrency(paymentAmount)}`);
+  } catch (error) {
+    console.error('Error updating monthly summary:', error);
+    // Don't throw - we don't want to fail the payment processing if summary update fails
   }
 }
 

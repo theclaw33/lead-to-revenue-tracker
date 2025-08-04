@@ -324,40 +324,51 @@ class QuickBooksAPI {
 
   /**
    * Get expenses for ad spend and promo spend calculation
-   * @param {string} startDate - Start date (YYYY-MM-DD)
-   * @param {string} endDate - End date (YYYY-MM-DD)
-   * @param {Array} categories - Array of expense categories to include
-   * @returns {Object} Expense totals by category
+   * @param {Object} params - Query parameters
+   * @returns {Array} Array of expense transactions
    */
-  async getExpensesByCategory(startDate, endDate, categories = ['Advertising', 'Promotional']) {
+  async getExpensesByCategory(params) {
+    const { startDate, endDate, categories = ['Advertising', 'Marketing'] } = params;
+    
     return new Promise((resolve, reject) => {
       if (!this.qbo) {
         reject(new Error('QuickBooks client not initialized'));
         return;
       }
       
-      // Query for expenses in the date range
-      const query = `SELECT * FROM Item WHERE Type='Service' AND Active=true`;
+      // Query for Purchase transactions (expenses) in the date range
+      const query = {
+        start_date: startDate,
+        end_date: endDate,
+        limit: 1000
+      };
       
-      this.qbo.reportBalanceSheet({ start_date: startDate, end_date: endDate }, (err, report) => {
+      this.qbo.findPurchases(query, (err, purchases) => {
         if (err) {
           console.error('Error fetching expenses from QuickBooks:', err);
           reject(err);
           return;
         }
         
-        // This is a simplified approach - you may need to adjust based on your QuickBooks setup
-        // You might want to use the Profit & Loss report or query expenses directly
-        const expenses = {
-          advertising: 0,
-          promotional: 0,
-          total: 0
-        };
+        const allPurchases = purchases.QueryResponse?.Purchase || [];
         
-        // Parse the report to extract advertising and promotional expenses
-        // This would need to be customized based on your QuickBooks account structure
+        // Filter purchases by account categories
+        const filteredPurchases = allPurchases.filter(purchase => {
+          const accountName = purchase.AccountRef?.name || '';
+          const lineAccountNames = purchase.Line?.map(line => line.AccountRef?.name || '') || [];
+          
+          // Check if main account or any line item account matches our categories
+          const allAccountNames = [accountName, ...lineAccountNames];
+          
+          return allAccountNames.some(name => 
+            categories.some(category => 
+              name.toLowerCase().includes(category.toLowerCase())
+            )
+          );
+        });
         
-        resolve(expenses);
+        console.log(`Found ${filteredPurchases.length} expenses matching categories:`, categories);
+        resolve(filteredPurchases);
       });
     });
   }

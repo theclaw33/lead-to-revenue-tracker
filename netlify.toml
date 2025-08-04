@@ -31,3 +31,14 @@
 
 [context.development.environment]
   NODE_ENV = "development"
+
+# Scheduled function for monthly ad spend update
+# This runs on the 3rd of every month at 2 AM UTC
+[functions."update-ad-spend"]
+  schedule = "0 2 3 * *"
+
+# Manual trigger endpoint for ad spend update
+[[redirects]]
+  from = "/api/update-ad-spend"
+  to = "/.netlify/functions/update-ad-spend"
+  status = 200

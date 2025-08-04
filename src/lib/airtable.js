@@ -378,6 +378,109 @@ class AirtableAPI {
   }
 
   /**
+   * Update monthly summary with a new payment (incremental update)
+   * @param {Object} paymentInfo - Payment information
+   * @returns {Object} Updated record
+   */
+  async updateMonthlySummaryWithPayment(paymentInfo) {
+    try {
+      const { month, year, leadSource, paymentAmount } = paymentInfo;
+      const period = `${year}-${String(month).padStart(2, '0')}`;
+      
+      console.log(`Updating monthly summary for ${period} with payment from ${leadSource}`);
+      
+      // Check if record already exists for this month/year
+      const existingRecords = await this.summaryTable.select({
+        filterByFormula: `{Period} = '${period}'`,
+        maxRecords: 1
+      }).firstPage();
+      
+      let record;
+      if (existingRecords.length > 0) {
+        // Update existing record
+        const existingRecord = existingRecords[0];
+        const currentFields = existingRecord.fields;
+        
+        // Parse existing revenue by source
+        let revenueBySource = {};
+        try {
+          revenueBySource = JSON.parse(currentFields['Revenue by Source'] || '{}');
+        } catch (e) {
+          console.log('Could not parse existing revenue by source, starting fresh');
+        }
+        
+        // Update revenue by source
+        if (!revenueBySource[leadSource]) {
+          revenueBySource[leadSource] = {
+            totalRevenue: 0,
+            customerCount: 0,
+            averageRevenue: 0
+          };
+        }
+        
+        revenueBySource[leadSource].totalRevenue += paymentAmount;
+        revenueBySource[leadSource].customerCount += 1;
+        revenueBySource[leadSource].averageRevenue = 
+          revenueBySource[leadSource].totalRevenue / revenueBySource[leadSource].customerCount;
+        
+        // Calculate new totals
+        const newTotalRevenue = (currentFields['Total Revenue'] || 0) + paymentAmount;
+        const newCustomerCount = (currentFields['Customer Count'] || 0) + 1;
+        const totalAdSpend = currentFields['Total Ad Spend'] || 0;
+        
+        const updateData = {
+          'Total Revenue': newTotalRevenue,
+          'Customer Count': newCustomerCount,
+          'Average Revenue Per Customer': newTotalRevenue / newCustomerCount,
+          'Revenue by Source': JSON.stringify(revenueBySource),
+          'Net Revenue': newTotalRevenue - totalAdSpend - (currentFields['Total Promo Spend'] || 0),
+          'ROI': totalAdSpend > 0 ? ((newTotalRevenue - totalAdSpend) / totalAdSpend * 100).toFixed(2) + '%' : 'N/A',
+          'Last Updated': new Date().toISOString()
+        };
+        
+        record = await this.summaryTable.update(existingRecord.getId(), updateData);
+        console.log('Monthly summary updated with new payment');
+      } else {
+        // Create new record with initial payment
+        const revenueBySource = {
+          [leadSource]: {
+            totalRevenue: paymentAmount,
+            customerCount: 1,
+            averageRevenue: paymentAmount
+          }
+        };
+        
+        const recordData = {
+          'Month': month,
+          'Year': year,
+          'Period': period,
+          'Total Revenue': paymentAmount,
+          'Total Ad Spend': 0, // Will be updated by scheduled job
+          'Total Promo Spend': 0,
+          'Net Revenue': paymentAmount,
+          'Customer Count': 1,
+          'Average Revenue Per Customer': paymentAmount,
+          'Revenue by Source': JSON.stringify(revenueBySource),
+          'ROI': 'N/A', // Will be calculated when ad spend is added
+          'Created At': new Date().toISOString(),
+          'Last Updated': new Date().toISOString()
+        };
+        
+        record = await this.summaryTable.create(recordData);
+        console.log('Monthly summary created with initial payment');
+      }
+      
+      return {
+        id: record.getId(),
+        fields: record.fields
+      };
+    } catch (error) {
+      console.error('Error updating monthly summary with payment:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get all leads for a specific month
    * @param {number} month - Month (1-12)
    * @param {number} year - Year
