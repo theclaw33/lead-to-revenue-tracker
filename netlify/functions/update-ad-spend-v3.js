@@ -168,17 +168,23 @@ async function fetchQuickBooksExpenses(tokenData, startDate, endDate, categories
     console.log(`Found ${purchases.length} purchases in QuickBooks`);
     
     // Filter by categories if specified
-    const filteredPurchases = purchases.filter(purchase => {
-      const accountName = purchase.AccountRef?.name || '';
-      const lineAccountNames = purchase.Line?.map(line => line.AccountRef?.name || '') || [];
-      const allAccountNames = [accountName, ...lineAccountNames];
-      
-      return allAccountNames.some(name => 
-        categories.some(category => 
-          name.toLowerCase().includes(category.toLowerCase())
-        )
-      );
-    });
+    let filteredPurchases;
+    if (categories.length === 0) {
+      // Return all purchases if no categories specified (for debugging)
+      filteredPurchases = purchases;
+    } else {
+      filteredPurchases = purchases.filter(purchase => {
+        const accountName = purchase.AccountRef?.name || '';
+        const lineAccountNames = purchase.Line?.map(line => line.AccountRef?.name || '') || [];
+        const allAccountNames = [accountName, ...lineAccountNames];
+        
+        return allAccountNames.some(name => 
+          categories.some(category => 
+            name.toLowerCase().includes(category.toLowerCase())
+          )
+        );
+      });
+    }
     
     console.log(`${filteredPurchases.length} purchases match expense categories`);
     return filteredPurchases;
@@ -200,6 +206,48 @@ exports.handler = async (event, context) => {
         timestamp: new Date().toISOString()
       })
     };
+  }
+  
+  // Debug endpoint to see all expenses
+  if (event.queryStringParameters?.debug) {
+    try {
+      const qbTokens = await initializeQuickBooks();
+      if (!qbTokens) {
+        return {
+          statusCode: 200,
+          body: JSON.stringify({ error: 'QuickBooks not connected' })
+        };
+      }
+      
+      // Get broader date range to see what expenses exist
+      const startDate = '2025-01-01';
+      const endDate = '2025-12-31';
+      
+      const allExpenses = await fetchQuickBooksExpenses(qbTokens, startDate, endDate, []);
+      
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          message: 'All expenses in 2025',
+          totalExpenses: allExpenses.length,
+          expenses: allExpenses.map(exp => ({
+            date: exp.TxnDate,
+            amount: exp.TotalAmt,
+            account: exp.AccountRef?.name,
+            vendor: exp.EntityRef?.name,
+            lines: exp.Line?.map(line => ({
+              amount: line.Amount,
+              account: line.AccountRef?.name
+            }))
+          }))
+        })
+      };
+    } catch (error) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: error.message })
+      };
+    }
   }
   
   try {
