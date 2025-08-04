@@ -1,6 +1,40 @@
 const Airtable = require('airtable');
 require('dotenv').config();
 
+/**
+ * Map QuickBooks account names to lead sources
+ */
+function mapAccountToLeadSource(accountName) {
+  const mapping = {
+    'Google Ads': 'Google Ads',
+    'Facebook Ads': 'Facebook Ads',
+    'Box Truck': 'Box Truck', 
+    'Angi': 'Angi',
+    'Yard Sign': 'Yard Sign',
+    'Billboard': 'Billboard',
+    'Marketing': 'General Marketing',
+    'Advertising': 'General Advertising',
+    'Online Advertising': 'Online Ads',
+    'Social Media Advertising': 'Social Media'
+  };
+  
+  // Try exact match first
+  if (mapping[accountName]) {
+    return mapping[accountName];
+  }
+  
+  // Try partial matches
+  const lowerAccount = accountName.toLowerCase();
+  for (const [key, value] of Object.entries(mapping)) {
+    if (lowerAccount.includes(key.toLowerCase()) || key.toLowerCase().includes(lowerAccount)) {
+      return value;
+    }
+  }
+  
+  // Default to account name if no mapping found
+  return accountName;
+}
+
 exports.handler = async (event, context) => {
   console.log('Update ad spend v2 function triggered');
   
@@ -63,56 +97,143 @@ exports.handler = async (event, context) => {
     const base = Airtable.base(process.env.AIRTABLE_BASE_ID);
     const summaryTable = base(process.env.AIRTABLE_MONTHLY_SUMMARY_TABLE_NAME || 'Monthly Summary');
     
-    // For now, create a placeholder update since we don't have QBO auth
-    // In production, this would fetch actual ad spend from QuickBooks
-    const adSpendData = {
+    // Initialize QuickBooks and fetch real ad spend data
+    const QuickBooksAPI = require('../../src/lib/quickbooks');
+    const qbo = new QuickBooksAPI();
+    
+    // Try to connect to QuickBooks
+    const qboConnected = await qbo.initializeFromStoredTokens();
+    let adSpendData = {
       totalAdSpend: 0,
       adSpendByCategory: {},
-      message: 'QuickBooks integration pending - placeholder data'
+      message: 'QuickBooks not connected - using placeholder data'
     };
     
-    // Find existing monthly summary record - try with month name first
-    let existingRecords;
-    try {
-      existingRecords = await summaryTable.select({
-        filterByFormula: `AND({Month} = "${monthName}", {Year} = "${year}")`,
-        maxRecords: 1
-      }).firstPage();
-    } catch (e) {
-      // If that fails, try with month number
-      console.log('Month name failed, trying with month number...');
-      existingRecords = await summaryTable.select({
-        filterByFormula: `AND({Month} = ${month}, {Year} = ${year})`,
-        maxRecords: 1
-      }).firstPage();
+    if (qboConnected) {
+      console.log('QuickBooks connected, fetching real ad spend data...');
+      try {
+        const expenses = await qbo.getExpensesByCategory({
+          startDate: `${year}-${String(month).padStart(2, '0')}-01`,
+          endDate: `${year}-${String(month).padStart(2, '0')}-${new Date(year, month, 0).getDate()}`,
+          categories: [
+            'Marketing',
+            'Advertising', 
+            'Google Ads',
+            'Facebook Ads',
+            'Box Truck',
+            'Angi',
+            'Yard Sign',
+            'Billboard',
+            'Online Advertising',
+            'Social Media Advertising'
+          ]
+        });
+        
+        // Process expenses by category
+        const adSpendByCategory = {};
+        let totalAdSpend = 0;
+        
+        expenses.forEach(expense => {
+          const amount = parseFloat(expense.TotalAmt) || 0;
+          const accountName = expense.AccountRef?.name || 'Uncategorized';
+          
+          // Map QBO account names to lead sources
+          let leadSource = mapAccountToLeadSource(accountName);
+          
+          if (!adSpendByCategory[leadSource]) {
+            adSpendByCategory[leadSource] = 0;
+          }
+          adSpendByCategory[leadSource] += amount;
+          totalAdSpend += amount;
+        });
+        
+        adSpendData = {
+          totalAdSpend,
+          adSpendByCategory,
+          message: `Found ${expenses.length} expenses totaling $${totalAdSpend.toFixed(2)}`
+        };
+        
+        console.log('Ad spend by category:', adSpendByCategory);
+      } catch (error) {
+        console.error('Error fetching QuickBooks data:', error);
+        adSpendData.message = `QuickBooks error: ${error.message}`;
+      }
     }
     
-    let record;
-    if (existingRecords.length === 0) {
-      console.log(`No monthly summary found for ${period}, creating new record`);
-      
-      // Create new record with placeholder ad spend
-      const recordData = {
-        'Month': monthName, // Use month name instead of number
-        'Year': String(year), // Convert year to string
-        'Total Revenue': 0,
-        'Ad Spend': String(adSpendData.totalAdSpend), // Convert to string
-        'Lead Source': 'Various' // Placeholder since this is monthly summary
-        // ROI is calculated by Airtable formula - don't set it
-      };
-      
-      record = await summaryTable.create(recordData);
-    } else {
-      // Update existing record
-      const existingRecord = existingRecords[0];
-      
-      const updateData = {
-        'Ad Spend': String(adSpendData.totalAdSpend) // Convert to string
-        // ROI is calculated by Airtable formula - don't set it
-      };
-      
-      record = await summaryTable.update(existingRecord.getId(), updateData);
-      console.log(`Monthly summary updated for ${period}`);
+    // Get all existing lead sources that have revenue for this month
+    const existingRecords = await summaryTable.select({
+      filterByFormula: `AND({Month} = "${monthName}", {Year} = "${year}")`,
+      maxRecords: 100
+    }).firstPage();
+    
+    console.log(`Found ${existingRecords.length} existing records for ${monthName} ${year}`);
+    
+    // Create a map of existing records by lead source
+    const existingByLeadSource = {};
+    existingRecords.forEach(record => {
+      const leadSource = record.fields['Lead Source'];
+      if (leadSource) {
+        existingByLeadSource[leadSource] = record;
+      }
+    });
+    
+    const updatedRecords = [];
+    const results = [];
+    
+    // Update ad spend for each lead source that has expenses
+    for (const [leadSource, adSpend] of Object.entries(adSpendData.adSpendByCategory)) {
+      if (adSpend > 0) {
+        const existingRecord = existingByLeadSource[leadSource];
+        
+        if (existingRecord) {
+          // Update existing record
+          const updateData = {
+            'Ad Spend': String(adSpend)
+          };
+          
+          const updatedRecord = await summaryTable.update(existingRecord.getId(), updateData);
+          updatedRecords.push({
+            leadSource,
+            adSpend,
+            action: 'updated',
+            recordId: updatedRecord.getId()
+          });
+        } else {
+          // Create new record for this lead source
+          const recordData = {
+            'Month': monthName,
+            'Year': String(year),
+            'Lead Source': leadSource,
+            'Total Revenue': 0, // Will be updated when payments come in
+            'Ad Spend': String(adSpend)
+          };
+          
+          const newRecord = await summaryTable.create(recordData);
+          updatedRecords.push({
+            leadSource,
+            adSpend,
+            action: 'created',
+            recordId: newRecord.getId()
+          });
+        }
+      }
+    }
+    
+    // Set ad spend to 0 for lead sources with no expenses this month
+    for (const [leadSource, record] of Object.entries(existingByLeadSource)) {
+      if (!adSpendData.adSpendByCategory[leadSource]) {
+        const updateData = {
+          'Ad Spend': '0'
+        };
+        
+        const updatedRecord = await summaryTable.update(record.getId(), updateData);
+        updatedRecords.push({
+          leadSource,
+          adSpend: 0,
+          action: 'zeroed',
+          recordId: updatedRecord.getId()
+        });
+      }
     }
     
     return {
@@ -120,9 +241,10 @@ exports.handler = async (event, context) => {
       body: JSON.stringify({
         message: 'Ad spend update completed',
         period: period,
-        adSpend: adSpendData.totalAdSpend,
-        note: adSpendData.message,
-        recordId: record.getId()
+        totalAdSpend: adSpendData.totalAdSpend,
+        qboMessage: adSpendData.message,
+        recordsProcessed: updatedRecords.length,
+        details: updatedRecords
       })
     };
   } catch (error) {
