@@ -36,7 +36,7 @@ function mapAccountToLeadSource(accountName) {
 }
 
 exports.handler = async (event, context) => {
-  console.log('Update ad spend v2 function triggered');
+  console.log('Update ad spend v2 function triggered - v3');
   
   // Quick test to see if function is reachable
   if (event.queryStringParameters?.test) {
